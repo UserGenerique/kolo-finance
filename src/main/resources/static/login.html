@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kolo Finance - Connexion</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 420px;
+            width: 100%;
+            padding: 2.5rem;
+        }
+        .logo {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #0f3460;
+        }
+        .logo span { color: #e94560; }
+        .btn-primary {
+            background: #0f3460;
+            border-color: #0f3460;
+        }
+        .btn-primary:hover {
+            background: #e94560;
+            border-color: #e94560;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="text-center mb-4">
+            <div class="logo">Kolo<span>Finance</span></div>
+            <p class="text-muted mt-2">Gestion de fonds via WhatsApp</p>
+        </div>
+
+        <div id="alert" class="alert alert-danger d-none" role="alert"></div>
+
+        <form id="loginForm">
+            <div class="mb-3">
+                <label for="apiKey" class="form-label">
+                    <i class="bi bi-key"></i> Clé API
+                </label>
+                <input type="password" class="form-control" id="apiKey" placeholder="Votre clé API" required>
+            </div>
+            <div class="mb-4">
+                <label for="orgSelect" class="form-label">
+                    <i class="bi bi-building"></i> Organisation
+                </label>
+                <select class="form-select" id="orgSelect" disabled>
+                    <option value="">Entrez la clé API d'abord</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary w-100 py-2" id="loginBtn" disabled>
+                <i class="bi bi-box-arrow-in-right"></i> Se connecter
+            </button>
+        </form>
+    </div>
+
+    <script>
+        const apiKeyInput = document.getElementById('apiKey');
+        const orgSelect = document.getElementById('orgSelect');
+        const loginBtn = document.getElementById('loginBtn');
+        const alert = document.getElementById('alert');
+        let debounceTimer;
+
+        apiKeyInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(loadOrganizations, 500);
+        });
+
+        async function loadOrganizations() {
+            const key = apiKeyInput.value.trim();
+            if (!key) return;
+            try {
+                const res = await fetch('/api/organizations', {
+                    headers: { 'X-API-Key': key }
+                });
+                if (!res.ok) throw new Error('Clé invalide');
+                const orgs = await res.json();
+                orgSelect.innerHTML = '<option value="">-- Choisir --</option>';
+                orgs.forEach(o => {
+                    orgSelect.innerHTML += `<option value="${o.id}">${o.name}</option>`;
+                });
+                orgSelect.disabled = false;
+                loginBtn.disabled = false;
+                alert.classList.add('d-none');
+            } catch (e) {
+                orgSelect.innerHTML = '<option value="">Clé invalide</option>';
+                orgSelect.disabled = true;
+                loginBtn.disabled = true;
+                alert.textContent = 'Clé API invalide';
+                alert.classList.remove('d-none');
+            }
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const key = apiKeyInput.value.trim();
+            const orgId = orgSelect.value;
+            const orgName = orgSelect.options[orgSelect.selectedIndex].text;
+            if (!key || !orgId) return;
+            sessionStorage.setItem('apiKey', key);
+            sessionStorage.setItem('orgId', orgId);
+            sessionStorage.setItem('orgName', orgName);
+            window.location.href = '/app.html';
+        });
+    </script>
+</body>
+</html>
