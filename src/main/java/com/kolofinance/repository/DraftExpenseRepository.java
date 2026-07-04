@@ -10,5 +10,7 @@ public interface DraftExpenseRepository extends JpaRepository<DraftExpense, Long
 
     Optional<DraftExpense> findFirstByAgentIdAndStatusOrderByCreatedAtDesc(Long agentId, DraftStatus status);
 
+    List<DraftExpense> findByAgentIdAndStatusOrderByCreatedAtDesc(Long agentId, DraftStatus status);
+
     List<DraftExpense> findByOrganizationIdOrderByCreatedAtDesc(Long organizationId);
 }

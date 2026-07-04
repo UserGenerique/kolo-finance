@@ -36,6 +36,7 @@ public class WhatsAppWebhookPayload {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Message {
+        private String id;
         private String from;
         private String type;
         private Text text;

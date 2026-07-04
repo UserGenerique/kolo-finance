@@ -9,6 +9,7 @@ RUN mvn package -DskipTests -B
 # --- Runtime stage ---
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
+RUN apk add --no-cache fontconfig ttf-dejavu
 COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 8080

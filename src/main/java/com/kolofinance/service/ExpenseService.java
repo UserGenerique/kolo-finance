@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -26,14 +28,36 @@ public class ExpenseService {
      * Crée un brouillon de dépense pour un agent.
      */
     public DraftExpense createDraft(User agent, ParsedExpense parsed) {
-        Optional<Fund> fundOpt = fundService.findActiveFundForAgent(agent.getId());
-        if (fundOpt.isEmpty()) {
-            throw new RuntimeException("Aucun fonds actif pour l'agent " + agent.getName());
+        return createDraft(agent, parsed, null);
+    }
+
+    public DraftExpense createDraft(User agent, ParsedExpense parsed, Long organizationId) {
+        List<Fund> activeFunds = fundService.findActiveSpendableFundsForAgent(agent.getId());
+        if (organizationId != null) {
+            activeFunds = activeFunds.stream()
+                    .filter(fund -> fund.getOrganization().getId().equals(organizationId))
+                    .toList();
         }
 
-        Fund fund = fundOpt.get();
+        if (activeFunds.isEmpty()) {
+            throw new RuntimeException("Aucun fonds actif disponible pour l'agent " + agent.getName());
+        }
+
+        if (organizationId == null) {
+            Set<Long> organizationIds = activeFunds.stream()
+                    .map(fund -> fund.getOrganization().getId())
+                    .collect(Collectors.toSet());
+            if (organizationIds.size() > 1) {
+                String exampleOrganization = activeFunds.get(0).getOrganization().getName();
+                throw new RuntimeException("Votre numéro est lié à plusieurs organisations avec fonds actifs. "
+                        + "Commencez le message par le nom de l'organisation, par exemple: "
+                        + exampleOrganization + ": 25000 carburant");
+            }
+        }
+
+        Fund fund = activeFunds.get(0);
         DraftExpense draft = DraftExpense.builder()
-                .organization(agent.getOrganization())
+                .organization(fund.getOrganization())
                 .agent(agent)
                 .fund(fund)
                 .amount(parsed.getAmount())
@@ -77,10 +101,22 @@ public class ExpenseService {
     /**
      * Annule un brouillon.
      */
+    @Transactional
     public void cancelDraft(DraftExpense draft) {
         draft.setStatus(DraftStatus.CANCELLED);
         draftExpenseRepository.save(draft);
         log.info("Brouillon annulé: {}", draft.getId());
+    }
+
+    @Transactional
+    public int cancelPendingDrafts(Long agentId) {
+        List<DraftExpense> drafts = draftExpenseRepository.findByAgentIdAndStatusOrderByCreatedAtDesc(agentId, DraftStatus.PENDING);
+        drafts.forEach(draft -> draft.setStatus(DraftStatus.CANCELLED));
+        draftExpenseRepository.saveAll(drafts);
+        if (!drafts.isEmpty()) {
+            log.info("{} brouillon(s) annulé(s) pour agent {}", drafts.size(), agentId);
+        }
+        return drafts.size();
     }
 
     /**

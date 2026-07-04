@@ -9,19 +9,30 @@ const App = {
     routes: {
         dashboard: { view: DashboardView, title: 'Tableau de bord', icon: 'bi-grid' },
         expenses:  { view: ExpensesView,  title: 'Dépenses',        icon: 'bi-receipt' },
+        reports:   { view: ReportsView,   title: 'Rapports',        icon: 'bi-file-earmark-bar-graph' },
         agents:    { view: AgentsView,    title: 'Utilisateurs',    icon: 'bi-people' },
-        funds:     { view: FundsView,     title: 'Fonds',           icon: 'bi-wallet2' }
+        funds:     { view: FundsView,     title: 'Fonds',           icon: 'bi-wallet2' },
+        pendingFunds: { view: PendingFundsView, title: 'Affectations', icon: 'bi-check2-square' }
     },
 
     /** Initialize app */
     init() {
         if (!Api.isLoggedIn()) {
+            sessionStorage.setItem('postLoginRedirect', window.location.href);
             window.location.href = '/login.html';
+            return;
+        }
+        if (Api.isPlatformAdmin() && !Api.getAuth().orgId) {
+            window.location.href = '/super-admin.html';
             return;
         }
 
         // Set org name in sidebar
-        document.getElementById('orgName').textContent = Api.getAuth().orgName;
+        const auth = Api.getAuth();
+        document.getElementById('orgName').textContent = auth.orgName;
+        document.getElementById('userName').textContent = auth.userName || auth.phoneNumber || '—';
+        document.getElementById('userRole').textContent = auth.role || '—';
+        this.applyRoleVisibility();
 
         // Setup sidebar navigation
         document.querySelectorAll('.nav-item[data-view]').forEach(item => {
@@ -39,8 +50,9 @@ const App = {
         document.getElementById('logoutBtn').addEventListener('click', () => Api.logout());
 
         // Load initial view from hash or default
+        const queryView = new URLSearchParams(window.location.search).get('view');
         const hash = window.location.hash.replace('#', '');
-        this.navigate(hash && this.routes[hash] ? hash : 'dashboard');
+        this.navigate(queryView && this.routes[queryView] ? queryView : (hash && this.routes[hash] ? hash : 'dashboard'));
 
         // Handle hash changes
         window.addEventListener('hashchange', () => {
@@ -53,6 +65,9 @@ const App = {
 
     /** Navigate to a view */
     navigate(viewName) {
+        if (!this.isRouteAllowed(viewName)) {
+            viewName = 'pendingFunds';
+        }
         const route = this.routes[viewName];
         if (!route) return;
 
@@ -82,6 +97,18 @@ const App = {
     closeSidebar() {
         document.getElementById('sidebar').classList.remove('open');
         document.getElementById('sidebarOverlay').classList.remove('open');
+    },
+
+    applyRoleVisibility() {
+        if (Api.canManageOrganization()) return;
+        document.querySelectorAll('[data-view]').forEach(item => {
+            item.classList.toggle('d-none', !['expenses', 'pendingFunds'].includes(item.dataset.view));
+        });
+    },
+
+    isRouteAllowed(viewName) {
+        if (Api.canManageOrganization()) return true;
+        return ['expenses', 'pendingFunds'].includes(viewName);
     }
 };
 

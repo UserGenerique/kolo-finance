@@ -1,6 +1,7 @@
 package com.kolofinance.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.kolofinance.model.enums.FundStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -31,6 +32,20 @@ public class Fund {
     private Long balance;
 
     private String description;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private FundStatus status = FundStatus.ACTIVE;
+
+    @Column(name = "receipt_confirmed_at")
+    private LocalDateTime receiptConfirmedAt;
+
+    @Column(name = "receipt_rejected_at")
+    private LocalDateTime receiptRejectedAt;
+
+    @Column(name = "receipt_note")
+    private String receiptNote;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

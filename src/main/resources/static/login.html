@@ -13,12 +13,13 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 1rem;
         }
         .login-card {
             background: #fff;
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 420px;
+            max-width: 460px;
             width: 100%;
             padding: 2.5rem;
         }
@@ -36,86 +37,150 @@
             background: #e94560;
             border-color: #e94560;
         }
+        .org-choice {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: .9rem;
+            cursor: pointer;
+            transition: all .15s ease;
+        }
+        .org-choice:hover {
+            border-color: #0f3460;
+            background: #f8fafc;
+        }
+        .org-choice small { color: #64748b; }
     </style>
 </head>
 <body>
     <div class="login-card">
         <div class="text-center mb-4">
             <div class="logo">Kolo<span>Finance</span></div>
-            <p class="text-muted mt-2">Gestion de fonds via WhatsApp</p>
+            <p class="text-muted mt-2">Connexion sécurisée par téléphone</p>
         </div>
 
         <div id="alert" class="alert alert-danger d-none" role="alert"></div>
 
         <form id="loginForm">
             <div class="mb-3">
-                <label for="apiKey" class="form-label">
-                    <i class="bi bi-key"></i> Clé API
+                <label for="phoneNumber" class="form-label">
+                    <i class="bi bi-phone"></i> Numéro WhatsApp
                 </label>
-                <input type="password" class="form-control" id="apiKey" placeholder="Votre clé API" required>
+                <input type="tel" class="form-control" id="phoneNumber" placeholder="22378550131" autocomplete="username" required>
+                <small class="text-muted">Indicatif pays + numéro, sans + ni espace.</small>
             </div>
             <div class="mb-4">
-                <label for="orgSelect" class="form-label">
-                    <i class="bi bi-building"></i> Organisation
+                <label for="password" class="form-label">
+                    <i class="bi bi-lock"></i> Mot de passe
                 </label>
-                <select class="form-select" id="orgSelect" disabled>
-                    <option value="">Entrez la clé API d'abord</option>
-                </select>
+                <input type="password" class="form-control" id="password" autocomplete="current-password" required>
             </div>
-            <button type="submit" class="btn btn-primary w-100 py-2" id="loginBtn" disabled>
+            <button type="submit" class="btn btn-primary w-100 py-2" id="loginBtn">
                 <i class="bi bi-box-arrow-in-right"></i> Se connecter
             </button>
         </form>
+
+        <div id="organizationStep" class="d-none">
+            <div class="mb-3">
+                <button class="btn btn-link p-0 text-decoration-none" id="backToLogin">
+                    <i class="bi bi-arrow-left"></i> Changer de compte
+                </button>
+            </div>
+            <h5>Choisir l’organisation</h5>
+            <p class="text-muted small">Ce numéro appartient à plusieurs organisations. Choisis l’espace à ouvrir.</p>
+            <div id="organizationChoices" class="d-grid gap-2"></div>
+        </div>
     </div>
 
+    <script src="/js/api.js"></script>
     <script>
-        const apiKeyInput = document.getElementById('apiKey');
-        const orgSelect = document.getElementById('orgSelect');
+        const form = document.getElementById('loginForm');
+        const alertBox = document.getElementById('alert');
         const loginBtn = document.getElementById('loginBtn');
-        const alert = document.getElementById('alert');
-        let debounceTimer;
+        const organizationStep = document.getElementById('organizationStep');
+        const organizationChoices = document.getElementById('organizationChoices');
+        let loginResponse = null;
 
-        apiKeyInput.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(loadOrganizations, 500);
-        });
-
-        async function loadOrganizations() {
-            const key = apiKeyInput.value.trim();
-            if (!key) return;
-            try {
-                const res = await fetch('/api/organizations', {
-                    headers: { 'X-API-Key': key }
-                });
-                if (!res.ok) throw new Error('Clé invalide');
-                const orgs = await res.json();
-                orgSelect.innerHTML = '<option value="">-- Choisir --</option>';
-                orgs.forEach(o => {
-                    orgSelect.innerHTML += `<option value="${o.id}">${o.name}</option>`;
-                });
-                orgSelect.disabled = false;
-                loginBtn.disabled = false;
-                alert.classList.add('d-none');
-            } catch (e) {
-                orgSelect.innerHTML = '<option value="">Clé invalide</option>';
-                orgSelect.disabled = true;
-                loginBtn.disabled = true;
-                alert.textContent = 'Clé API invalide';
-                alert.classList.remove('d-none');
-            }
+        function showError(message) {
+            alertBox.textContent = message;
+            alertBox.classList.remove('d-none');
         }
 
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
+        function hideError() {
+            alertBox.classList.add('d-none');
+        }
+
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const key = apiKeyInput.value.trim();
-            const orgId = orgSelect.value;
-            const orgName = orgSelect.options[orgSelect.selectedIndex].text;
-            if (!key || !orgId) return;
-            sessionStorage.setItem('apiKey', key);
-            sessionStorage.setItem('orgId', orgId);
-            sessionStorage.setItem('orgName', orgName);
-            window.location.href = '/app.html';
+            hideError();
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Connexion...';
+            try {
+                loginResponse = await Api.login(
+                    document.getElementById('phoneNumber').value,
+                    document.getElementById('password').value
+                );
+
+                if (loginResponse.userType === 'PLATFORM_ADMIN') {
+                    Api.storeLogin(loginResponse);
+                    window.location.href = '/super-admin.html';
+                    return;
+                }
+
+                const organizations = loginResponse.organizations || [];
+                if (organizations.length === 0) {
+                    throw new Error('Aucune organisation active pour ce compte.');
+                }
+                if (organizations.length === 1) {
+                    Api.storeLogin(loginResponse, organizations[0]);
+                    redirectAfterLogin('/app.html');
+                    return;
+                }
+                renderOrganizationChoices(organizations);
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Se connecter';
+            }
         });
+
+        document.getElementById('backToLogin').addEventListener('click', () => {
+            sessionStorage.clear();
+            loginResponse = null;
+            organizationStep.classList.add('d-none');
+            form.classList.remove('d-none');
+            hideError();
+        });
+
+        function renderOrganizationChoices(organizations) {
+            form.classList.add('d-none');
+            organizationStep.classList.remove('d-none');
+            organizationChoices.innerHTML = organizations.map(org => `
+                <div class="org-choice" data-org-id="${org.id}">
+                    <strong>${escapeHtml(org.name)}</strong><br>
+                    <small>Rôle : ${escapeHtml(org.role)}</small>
+                </div>
+            `).join('');
+            organizationChoices.querySelectorAll('.org-choice').forEach(choice => {
+                choice.addEventListener('click', () => {
+                    const org = organizations.find(item => String(item.id) === choice.dataset.orgId);
+                    Api.storeLogin(loginResponse, org);
+                    redirectAfterLogin('/app.html');
+                });
+            });
+        }
+
+        function redirectAfterLogin(defaultUrl) {
+            const redirect = sessionStorage.getItem('postLoginRedirect');
+            sessionStorage.removeItem('postLoginRedirect');
+            window.location.href = redirect || defaultUrl;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            }[ch]));
+        }
     </script>
 </body>
 </html>

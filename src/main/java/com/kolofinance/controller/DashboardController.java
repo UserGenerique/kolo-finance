@@ -1,16 +1,17 @@
 package com.kolofinance.controller;
 
-import com.kolofinance.dto.DashboardSummary;
-import com.kolofinance.model.Fund;
-import com.kolofinance.repository.ExpenseRepository;
-import com.kolofinance.repository.UserRepository;
-import com.kolofinance.service.FundService;
+import com.kolofinance.dto.DashboardAnalytics;
+import com.kolofinance.dto.DashboardFilter;
+import com.kolofinance.service.DashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
@@ -18,36 +19,46 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DashboardController {
 
-    private final ExpenseRepository expenseRepository;
-    private final UserRepository userRepository;
-    private final FundService fundService;
+    private final DashboardService dashboardService;
 
     @GetMapping
-    public ResponseEntity<DashboardSummary> getDashboard(@PathVariable Long orgId) {
-        Long totalExpenses = expenseRepository.sumAmountByOrganizationId(orgId);
-        List<Fund> funds = fundService.findByOrganization(orgId);
-        long totalFunds = funds.stream().mapToLong(Fund::getInitialAmount).sum();
-        long totalBalance = funds.stream().mapToLong(Fund::getBalance).sum();
-        int agentCount = userRepository.findByOrganizationIdAndActiveTrue(orgId).size();
-        int expenseCount = expenseRepository.findByOrganizationIdOrderByConfirmedAtDesc(orgId).size();
+    public ResponseEntity<DashboardAnalytics> getDashboard(
+            @PathVariable Long orgId,
+            @RequestParam Map<String, String> params) {
+        return ResponseEntity.ok(dashboardService.buildAnalytics(orgId, buildFilter(params)));
+    }
 
-        // Dépenses par catégorie
-        Map<String, Long> byCategory = new LinkedHashMap<>();
-        for (Object[] row : expenseRepository.sumByCategory(orgId)) {
-            String cat = row[0] != null ? row[0].toString() : "DIVERS";
-            Long sum = ((Number) row[1]).longValue();
-            byCategory.put(cat, sum);
-        }
-
-        DashboardSummary summary = DashboardSummary.builder()
-                .totalExpenses(totalExpenses)
-                .totalFunds(totalFunds)
-                .totalBalance(totalBalance)
-                .agentCount(agentCount)
-                .expenseCount(expenseCount)
-                .expensesByCategory(byCategory)
+    static DashboardFilter buildFilter(Map<String, String> params) {
+        return DashboardFilter.builder()
+                .period(blankToNull(params.get("period")))
+                .startDate(parseDate(params.get("startDate")))
+                .endDate(parseDate(params.get("endDate")))
+                .agentId(parseLong(params.get("agentId")))
+                .fundId(parseLong(params.get("fundId")))
+                .category(blankToNull(params.get("category")))
+                .search(blankToNull(params.get("search")))
+                .minAmount(parseLong(params.get("minAmount")))
+                .maxAmount(parseLong(params.get("maxAmount")))
+                .includeAgentBalances(parseBoolean(params.get("includeAgentBalances")))
                 .build();
+    }
 
-        return ResponseEntity.ok(summary);
+    static LocalDate parseDate(String value) {
+        if (value == null || value.isBlank()) return null;
+        return LocalDate.parse(value);
+    }
+
+    static Long parseLong(String value) {
+        if (value == null || value.isBlank()) return null;
+        return Long.valueOf(value);
+    }
+
+    static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    static Boolean parseBoolean(String value) {
+        if (value == null || value.isBlank()) return null;
+        return Boolean.valueOf(value);
     }
 }

@@ -23,12 +23,19 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
-# --- WhatsApp Cloud API ---
+# --- WhatsApp ---
 whatsapp:
-  token: ${WHATSAPP_TOKEN}
-  phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID}
-  verify-token: ${WHATSAPP_VERIFY_TOKEN}
-  api-url: https://graph.facebook.com/v21.0
+  provider: ${WHATSAPP_PROVIDER:gowa}
+  token: ${WHATSAPP_TOKEN:}
+  phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+  verify-token: ${WHATSAPP_VERIFY_TOKEN:kolo-verify-token}
+  api-url: ${WHATSAPP_API_URL:https://graph.facebook.com/v21.0}
+  gowa:
+    base-url: ${GOWA_BASE_URL:http://localhost:3000}
+    username: ${GOWA_USERNAME:}
+    password: ${GOWA_PASSWORD:}
+    device-id: ${GOWA_DEVICE_ID:}
+    webhook-secret: ${GOWA_WEBHOOK_SECRET:}
 
 # --- OpenRouter AI ---
 openrouter:
@@ -39,6 +46,13 @@ openrouter:
 # --- App security ---
 app:
   api-key: ${APP_API_KEY}
+  public-url: ${APP_PUBLIC_URL:https://kolo-finance.duckdns.org}
+# --- Platform admin bootstrap ---
+platform:
+  admin:
+    phone: ${PLATFORM_ADMIN_PHONE:}
+    name: ${PLATFORM_ADMIN_NAME:Super Admin}
+    password: ${PLATFORM_ADMIN_PASSWORD:}
 
 logging:
   level:

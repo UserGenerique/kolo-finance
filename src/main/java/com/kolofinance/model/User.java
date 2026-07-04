@@ -16,7 +16,7 @@ public class User {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id", nullable = false)
+    @JoinColumn(name = "organization_id")
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Organization organization;
 
@@ -33,6 +33,15 @@ public class User {
     @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
+
+    @Column(name = "password_hash")
+    private String passwordHash;
+
+    @Column(name = "password_set_at")
+    private LocalDateTime passwordSetAt;
+
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

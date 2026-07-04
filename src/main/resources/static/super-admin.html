@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kolo Finance - Super Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <div class="main-content" style="margin-left:0">
+        <header class="topbar">
+            <div>
+                <span class="topbar-title"><i class="bi bi-shield-lock"></i> Super admin Kolo Finance</span>
+                <div class="small text-muted" id="adminName"></div>
+            </div>
+            <button class="btn-kf-outline" id="logoutBtn"><i class="bi bi-box-arrow-left"></i> Déconnexion</button>
+        </header>
+
+        <main class="page-content">
+            <div id="alertBox"></div>
+            <div class="summary-strip mb-3" id="summaryStrip"></div>
+
+            <div class="row g-3">
+                <div class="col-xl-4">
+                    <div class="data-card sticky-panel">
+                        <div class="data-card-header">
+                            <h5><i class="bi bi-building-add"></i> Nouvelle organisation</h5>
+                        </div>
+                        <form id="orgForm" class="p-3">
+                            <div class="mb-3">
+                                <label class="form-label">Nom organisation</label>
+                                <input type="text" class="form-control" id="orgName" required>
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Plan</label>
+                                    <select class="form-select" id="subscriptionPlan">
+                                        <option value="STARTER">STARTER</option>
+                                        <option value="PRO">PRO</option>
+                                        <option value="BUSINESS">BUSINESS</option>
+                                        <option value="ENTERPRISE">ENTERPRISE</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Statut</label>
+                                    <select class="form-select" id="subscriptionStatus">
+                                        <option value="TRIAL">TRIAL</option>
+                                        <option value="ACTIVE">ACTIVE</option>
+                                        <option value="PAST_DUE">PAST_DUE</option>
+                                        <option value="SUSPENDED">SUSPENDED</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Nombre max d’agents</label>
+                                <input type="number" min="1" class="form-control" id="maxAgents" value="5">
+                            </div>
+                            <hr>
+                            <h6>Compte patron initial</h6>
+                            <div class="mb-3">
+                                <label class="form-label">Nom patron</label>
+                                <input type="text" class="form-control" id="bossName" placeholder="Patron">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">WhatsApp patron</label>
+                                <input type="text" class="form-control" id="bossPhoneNumber" placeholder="22378550131">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Mot de passe patron</label>
+                                <input type="password" class="form-control" id="bossPassword" autocomplete="new-password">
+                                <small class="text-muted">Si tu renseignes le téléphone, renseigne aussi le mot de passe.</small>
+                            </div>
+                            <button class="btn-kf w-100" type="submit"><i class="bi bi-plus-lg"></i> Créer l’organisation</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-xl-8">
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <div>
+                                <h5><i class="bi bi-buildings"></i> Organisations clientes</h5>
+                                <small class="text-muted">Gestion manuelle des plans et limites.</small>
+                            </div>
+                            <button class="btn-kf-outline" id="refreshBtn"><i class="bi bi-arrow-clockwise"></i> Actualiser</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr><th>Organisation</th><th>Plan</th><th>Statut</th><th>Agents</th><th>Utilisateurs</th><th>Créée le</th><th>Actions</th></tr>
+                                </thead>
+                                <tbody id="orgRows"></tbody>
+                            </table>
+                        </div>
+                        <div id="emptyState" class="empty-state d-none"><i class="bi bi-buildings"></i><p>Aucune organisation</p></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal fade" id="subscriptionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Modifier abonnement</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="subscriptionForm">
+                    <input type="hidden" id="editOrgId">
+                    <div class="modal-body">
+                        <div class="alert alert-info" id="editOrgInfo"></div>
+                        <div class="mb-3">
+                            <label class="form-label">Plan</label>
+                            <select class="form-select" id="editSubscriptionPlan">
+                                <option value="STARTER">STARTER</option>
+                                <option value="PRO">PRO</option>
+                                <option value="BUSINESS">BUSINESS</option>
+                                <option value="ENTERPRISE">ENTERPRISE</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Statut</label>
+                            <select class="form-select" id="editSubscriptionStatus">
+                                <option value="TRIAL">TRIAL</option>
+                                <option value="ACTIVE">ACTIVE</option>
+                                <option value="PAST_DUE">PAST_DUE</option>
+                                <option value="SUSPENDED">SUSPENDED</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Max agents</label>
+                            <input type="number" min="1" class="form-control" id="editMaxAgents">
+                        </div>
+                        <div id="editError" class="alert alert-danger d-none"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" class="btn-kf">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/api.js"></script>
+    <script>
+        const State = { organizations: [] };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!Api.isPlatformAdmin()) {
+                window.location.href = '/login.html';
+                return;
+            }
+            document.getElementById('adminName').textContent = Api.getAuth().userName || 'Super admin';
+            document.getElementById('logoutBtn').addEventListener('click', () => Api.logout());
+            document.getElementById('refreshBtn').addEventListener('click', loadOrganizations);
+            document.getElementById('orgForm').addEventListener('submit', createOrganization);
+            document.getElementById('subscriptionForm').addEventListener('submit', updateSubscription);
+            loadOrganizations();
+        });
+
+        async function loadOrganizations() {
+            try {
+                State.organizations = await Api.getPlatformOrganizations();
+                renderOrganizations();
+                showAlert('', null);
+            } catch (err) {
+                showAlert(err.message, 'danger');
+            }
+        }
+
+        async function createOrganization(e) {
+            e.preventDefault();
+            const bossPhoneNumber = value('bossPhoneNumber');
+            const bossPassword = value('bossPassword');
+            if ((bossPhoneNumber && !bossPassword) || (!bossPhoneNumber && bossPassword)) {
+                showAlert('Pour créer le compte patron, téléphone et mot de passe sont obligatoires ensemble.', 'danger');
+                return;
+            }
+            try {
+                await Api.createPlatformOrganization({
+                    name: value('orgName'),
+                    subscriptionPlan: value('subscriptionPlan'),
+                    subscriptionStatus: value('subscriptionStatus'),
+                    maxAgents: value('maxAgents'),
+                    bossName: value('bossName') || 'Patron',
+                    bossPhoneNumber,
+                    bossPassword
+                });
+                document.getElementById('orgForm').reset();
+                document.getElementById('maxAgents').value = 5;
+                showAlert('Organisation créée.', 'success');
+                await loadOrganizations();
+            } catch (err) {
+                showAlert(err.message, 'danger');
+            }
+        }
+
+        function renderOrganizations() {
+            const rows = document.getElementById('orgRows');
+            const empty = document.getElementById('emptyState');
+            const orgs = State.organizations || [];
+            const activeCount = orgs.filter(o => o.subscriptionStatus === 'ACTIVE').length;
+            document.getElementById('summaryStrip').innerHTML = `
+                <i class="bi bi-speedometer2"></i>
+                <span>${orgs.length} organisation(s)</span>
+                <span>${activeCount} active(s)</span>
+                <span>${orgs.reduce((sum, o) => sum + (o.activeAgentsCount || 0), 0)} agent(s) actif(s)</span>`;
+
+            if (orgs.length === 0) {
+                rows.innerHTML = '';
+                empty.classList.remove('d-none');
+                return;
+            }
+            empty.classList.add('d-none');
+            rows.innerHTML = orgs.map(org => `
+                <tr>
+                    <td><strong>${escapeHtml(org.name)}</strong><br><small class="text-muted">#${org.id}</small></td>
+                    <td><span class="badge-role">${escapeHtml(org.subscriptionPlan || 'STARTER')}</span></td>
+                    <td><span class="badge-status badge-${escapeHtml(org.subscriptionStatus || 'TRIAL')}">${escapeHtml(org.subscriptionStatus || 'TRIAL')}</span></td>
+                    <td>${org.activeAgentsCount || 0} / ${org.maxAgents || '—'}</td>
+                    <td>${org.usersCount || 0}</td>
+                    <td>${formatDate(org.createdAt)}</td>
+                    <td>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button class="btn btn-sm btn-outline-primary" onclick="openSubscriptionModal(${org.id})"><i class="bi bi-pencil"></i> Abonnement</button>
+                            <button class="btn btn-sm btn-outline-success" onclick="openOrganization(${org.id})"><i class="bi bi-box-arrow-in-right"></i> Ouvrir</button>
+                        </div>
+                    </td>
+                </tr>`).join('');
+        }
+
+        function openOrganization(orgId) {
+            const org = State.organizations.find(item => item.id === orgId);
+            if (!org) return;
+            Api.selectOrganization({ id: org.id, name: org.name, role: 'BOSS' });
+            window.location.href = '/app.html';
+        }
+
+        function openSubscriptionModal(orgId) {
+            const org = State.organizations.find(item => item.id === orgId);
+            if (!org) return;
+            document.getElementById('editOrgId').value = org.id;
+            document.getElementById('editOrgInfo').innerHTML = `<strong>${escapeHtml(org.name)}</strong><br>${org.activeAgentsCount || 0} agent(s) actif(s), ${org.usersCount || 0} utilisateur(s).`;
+            document.getElementById('editSubscriptionPlan').value = org.subscriptionPlan || 'STARTER';
+            document.getElementById('editSubscriptionStatus').value = org.subscriptionStatus || 'TRIAL';
+            document.getElementById('editMaxAgents').value = org.maxAgents || 5;
+            document.getElementById('editError').classList.add('d-none');
+            new bootstrap.Modal(document.getElementById('subscriptionModal')).show();
+        }
+
+        async function updateSubscription(e) {
+            e.preventDefault();
+            const errEl = document.getElementById('editError');
+            errEl.classList.add('d-none');
+            try {
+                await Api.updateOrganizationSubscription(document.getElementById('editOrgId').value, {
+                    subscriptionPlan: value('editSubscriptionPlan'),
+                    subscriptionStatus: value('editSubscriptionStatus'),
+                    maxAgents: value('editMaxAgents')
+                });
+                bootstrap.Modal.getInstance(document.getElementById('subscriptionModal')).hide();
+                await loadOrganizations();
+            } catch (err) {
+                errEl.textContent = err.message;
+                errEl.classList.remove('d-none');
+            }
+        }
+
+        function value(id) {
+            return document.getElementById(id).value.trim();
+        }
+
+        function showAlert(message, type) {
+            const el = document.getElementById('alertBox');
+            el.innerHTML = message ? `<div class="alert alert-${type}">${escapeHtml(message)}</div>` : '';
+        }
+
+        function formatDate(value) {
+            if (!value) return '—';
+            return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+            }[ch]));
+        }
+    </script>
+</body>
+</html>
