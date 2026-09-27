@@ -3,7 +3,7 @@ services:
     build: .
     container_name: kolo-finance-api
     ports:
-      - "8080:8080"
+      - "127.0.0.1:18081:8080"
     env_file:
       - .env
     restart: unless-stopped
