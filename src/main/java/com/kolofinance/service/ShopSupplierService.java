@@ -4,14 +4,13 @@ import com.kolofinance.model.*;
 import com.kolofinance.repository.ShopAcquisitionRepository;
 import com.kolofinance.repository.ShopSupplierPaymentRepository;
 import com.kolofinance.repository.ShopSupplierRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,31 +22,54 @@ public class ShopSupplierService {
     private final OrganizationService organizationService;
 
     public List<ShopSupplier> listActive(Long organizationId) {
-        return supplierRepository.findByOrganizationIdAndActiveTrueOrderByNameAsc(organizationId);
+        return supplierRepository.findByOrganizationIdAndActiveTrueOrderByNameAsc(
+            organizationId
+        );
     }
 
     public List<ShopSupplier> listDebtors(Long organizationId) {
-        return supplierRepository.findByOrganizationIdAndActiveTrueAndOutstandingBalanceGreaterThanOrderByOutstandingBalanceDesc(organizationId, 0L);
+        return supplierRepository.findByOrganizationIdAndActiveTrueAndOutstandingBalanceGreaterThanOrderByOutstandingBalanceDesc(
+            organizationId,
+            0L
+        );
     }
 
     public ShopSupplier findById(Long id) {
-        return supplierRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Fournisseur introuvable."));
+        return supplierRepository
+            .findById(id)
+            .orElseThrow(() ->
+                new RuntimeException("Fournisseur introuvable.")
+            );
     }
 
     @Transactional
-    public ShopSupplier upsertSupplier(Long organizationId, String name, String phoneNumber) {
-        Organization organization = organizationService.findById(organizationId);
-        String cleanName = requireText(name, "Le nom du fournisseur est obligatoire.");
+    public ShopSupplier upsertSupplier(
+        Long organizationId,
+        String name,
+        String phoneNumber
+    ) {
+        Organization organization = organizationService.findById(
+            organizationId
+        );
+        String cleanName = requireText(
+            name,
+            "Le nom du fournisseur est obligatoire."
+        );
         String normalizedName = normalize(cleanName);
 
-        Optional<ShopSupplier> existing = supplierRepository.findFirstByOrganizationIdAndActiveTrueAndNormalizedName(organizationId, normalizedName);
-        ShopSupplier supplier = existing.orElseGet(() -> ShopSupplier.builder()
+        Optional<ShopSupplier> existing =
+            supplierRepository.findFirstByOrganizationIdAndActiveTrueAndNormalizedName(
+                organizationId,
+                normalizedName
+            );
+        ShopSupplier supplier = existing.orElseGet(() ->
+            ShopSupplier.builder()
                 .organization(organization)
                 .normalizedName(normalizedName)
                 .outstandingBalance(0L)
                 .active(true)
-                .build());
+                .build()
+        );
 
         supplier.setName(cleanName);
         supplier.setNormalizedName(normalizedName);
@@ -59,50 +81,98 @@ public class ShopSupplierService {
     }
 
     public ShopSupplier resolveSupplier(Long organizationId, String query) {
-        String cleanQuery = requireText(query, "Indiquez le nom du fournisseur.");
+        String cleanQuery = requireText(
+            query,
+            "Indiquez le nom du fournisseur."
+        );
         String normalized = normalize(cleanQuery);
 
-        Optional<ShopSupplier> exact = supplierRepository.findFirstByOrganizationIdAndActiveTrueAndNormalizedName(organizationId, normalized);
+        Optional<ShopSupplier> exact =
+            supplierRepository.findFirstByOrganizationIdAndActiveTrueAndNormalizedName(
+                organizationId,
+                normalized
+            );
         if (exact.isPresent()) {
             return exact.get();
         }
 
-        List<ShopSupplier> matches = supplierRepository.findByOrganizationIdAndActiveTrueAndNormalizedNameContainingOrderByNameAsc(organizationId, normalized);
+        List<ShopSupplier> matches =
+            supplierRepository.findByOrganizationIdAndActiveTrueAndNormalizedNameContainingOrderByNameAsc(
+                organizationId,
+                normalized
+            );
         if (matches.isEmpty()) {
-            throw new RuntimeException("Fournisseur introuvable: " + cleanQuery + ". Créez-le avec: *fournisseur " + cleanQuery + " +22376001122*.");
+            throw new RuntimeException(
+                "Fournisseur introuvable: " +
+                    cleanQuery +
+                    ". Créez-le avec: *fournisseur " +
+                    cleanQuery +
+                    " +22376001122*."
+            );
         }
         if (matches.size() > 1) {
-            String names = matches.stream().limit(5).map(ShopSupplier::getName).reduce((a, b) -> a + ", " + b).orElse("");
-            throw new RuntimeException("Plusieurs fournisseurs correspondent: " + names + ". Précisez le nom.");
+            String names = matches
+                .stream()
+                .limit(5)
+                .map(ShopSupplier::getName)
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("");
+            throw new RuntimeException(
+                "Plusieurs fournisseurs correspondent: " +
+                    names +
+                    ". Précisez le nom."
+            );
         }
         return matches.get(0);
     }
 
     @Transactional
-    public ShopSupplierPayment recordPayment(Long organizationId, User recordedBy, String supplierQuery, Long amount, String note) {
+    public ShopSupplierPayment recordPayment(
+        Long organizationId,
+        User recordedBy,
+        String supplierQuery,
+        Long amount,
+        String note
+    ) {
         if (amount == null || amount <= 0) {
             throw new RuntimeException("Montant paiement invalide.");
         }
         ShopSupplier supplier = resolveSupplier(organizationId, supplierQuery);
         long currentDebt = nullToZero(supplier.getOutstandingBalance());
         if (currentDebt <= 0) {
-            throw new RuntimeException(supplier.getName() + " n'a aucune dette fournisseur.");
+            throw new RuntimeException(
+                supplier.getName() + " n'a aucune dette fournisseur."
+            );
         }
         if (amount > currentDebt) {
-            throw new RuntimeException("Le paiement dépasse la dette de " + supplier.getName() + " (" + currentDebt + " FCFA).");
+            throw new RuntimeException(
+                "Le paiement dépasse la dette de " +
+                    supplier.getName() +
+                    " (" +
+                    currentDebt +
+                    " FCFA)."
+            );
         }
 
-        // Apply payment to oldest unpaid acquisitions (FIFO)
+        // Apply payment to oldest unpaid acquisitions (FIFO).
+        // On ne met à jour QUE dueAmount (suivi de dette). On NE touche PAS
+        // acq.paidAmount : ce champ représente le cash sorti au moment de l'achat
+        // (figé à sa date). Le règlement de dette est tracé séparément par le
+        // ShopSupplierPayment ci-dessous, à sa propre date. Muter paidAmount ici
+        // provoquerait un double comptage dans la caisse.
         long remainingPayment = amount;
-        List<ShopAcquisition> unpaidAcquisitions = acquisitionRepository
-                .findByOrganizationIdAndSupplierIdAndDueAmountGreaterThanOrderByConfirmedAtAsc(organizationId, supplier.getId(), 0L);
+        List<ShopAcquisition> unpaidAcquisitions =
+            acquisitionRepository.findByOrganizationIdAndSupplierIdAndDueAmountGreaterThanOrderByConfirmedAtAsc(
+                organizationId,
+                supplier.getId(),
+                0L
+            );
         ShopAcquisition firstTouched = null;
         for (ShopAcquisition acq : unpaidAcquisitions) {
             if (remainingPayment <= 0) break;
             long due = nullToZero(acq.getDueAmount());
             long applied = Math.min(due, remainingPayment);
             acq.setDueAmount(due - applied);
-            acq.setPaidAmount(nullToZero(acq.getPaidAmount()) + applied);
             acquisitionRepository.save(acq);
             if (firstTouched == null) firstTouched = acq;
             remainingPayment -= applied;
@@ -111,7 +181,8 @@ public class ShopSupplierService {
         supplier.setOutstandingBalance(currentDebt - amount);
         supplierRepository.save(supplier);
 
-        return paymentRepository.save(ShopSupplierPayment.builder()
+        return paymentRepository.save(
+            ShopSupplierPayment.builder()
                 .organization(supplier.getOrganization())
                 .supplier(supplier)
                 .acquisition(firstTouched)
@@ -119,23 +190,25 @@ public class ShopSupplierService {
                 .amount(amount)
                 .paymentMethod("CASH")
                 .note(note)
-                .build());
+                .build()
+        );
     }
 
     public java.time.LocalDateTime lastPaymentDate(Long supplierId) {
-        return paymentRepository.findFirstBySupplierIdOrderByCreatedAtDesc(supplierId)
-                .map(ShopSupplierPayment::getCreatedAt)
-                .orElse(null);
+        return paymentRepository
+            .findFirstBySupplierIdOrderByCreatedAtDesc(supplierId)
+            .map(ShopSupplierPayment::getCreatedAt)
+            .orElse(null);
     }
 
     public String normalize(String value) {
         if (value == null) return "";
         return Normalizer.normalize(value, Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "")
-                .toLowerCase(Locale.ROOT)
-                .replaceAll("[^a-z0-9]+", " ")
-                .trim()
-                .replaceAll("\\s+", " ");
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9]+", " ")
+            .trim()
+            .replaceAll("\\s+", " ");
     }
 
     private String requireText(String value, String message) {

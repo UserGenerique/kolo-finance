@@ -93,6 +93,15 @@ public class ShopWhatsAppService {
     );
 
     public boolean handleMessage(User user, String text) {
+        return handleMessage(user, text, null);
+    }
+
+    /**
+     * Traite un message boutique en privilégiant l'organisation résolue depuis
+     * le canal WhatsApp. Le paramètre reste optionnel pour conserver le mode
+     * legacy des installations mono-boutique.
+     */
+    public boolean handleMessage(User user, String text, Long preferredOrganizationId) {
         String normalized = normalize(text);
         Optional<ShopConversationSession> activeSale =
             conversationService.findActiveSaleSession(user.getId());
@@ -106,7 +115,7 @@ public class ShopWhatsAppService {
             return false;
         }
 
-        OrganizationMembership membership = resolveMembership(user);
+        OrganizationMembership membership = resolveMembership(user, preferredOrganizationId);
         Long orgId = membership.getOrganization().getId();
         Role role = membership.getRole();
 
@@ -2293,8 +2302,21 @@ public class ShopWhatsAppService {
     }
 
     private OrganizationMembership resolveMembership(User user) {
+        return resolveMembership(user, null);
+    }
+
+    private OrganizationMembership resolveMembership(User user, Long preferredOrganizationId) {
         List<OrganizationMembership> memberships =
             userService.findActiveMembershipsForUser(user.getId());
+        if (preferredOrganizationId != null) {
+            return memberships.stream()
+                .filter(membership -> membership.getOrganization() != null
+                    && preferredOrganizationId.equals(membership.getOrganization().getId()))
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException(
+                    "Votre numéro n'est pas autorisé dans cette boutique."
+                ));
+        }
         if (memberships.isEmpty()) {
             throw new RuntimeException(
                 "Votre compte n'est actif dans aucune organisation."
@@ -2431,6 +2453,9 @@ public class ShopWhatsAppService {
             ? start.format(SHORT_DATE)
             : start.format(SHORT_DATE) + " → " + end.format(SHORT_DATE);
         StringBuilder sb = new StringBuilder("💰 *Caisse " + period + "*\n\n");
+        sb.append("🔹 Report (solde antérieur): *")
+            .append(amount(cr.openingBalance()))
+            .append(" F*\n\n");
         sb.append("*Entrées:*\n")
             .append("• Ventes encaissées: ")
             .append(amount(cr.salesIncome()))
@@ -2449,11 +2474,17 @@ public class ShopWhatsAppService {
             .append(" F (")
             .append(cr.expensesCount())
             .append(")\n")
+            .append("• Achats/fournisseurs: ")
+            .append(amount(cr.acquisitionsPaid()))
+            .append(" F\n")
             .append("Total sorties: *")
             .append(amount(cr.totalExpenses()))
             .append(" F*\n\n");
-        sb.append("📊 *Solde caisse: ")
+        sb.append("📈 Solde de la période: *")
             .append(amount(cr.balance()))
+            .append(" F*\n");
+        sb.append("📊 *Solde caisse total: ")
+            .append(amount(cr.closingBalance()))
             .append(" FCFA*");
         whatsAppService.sendMessage(user.getPhoneNumber(), sb.toString());
     }
@@ -3637,13 +3668,50 @@ public class ShopWhatsAppService {
             }
         }
 
+        // Balayage du catalogue: on ne retient qu'un produit dont le NOM COMPLET
+        // (normalisé) apparaît dans le message, jamais sur un simple mot partagé.
+        // Ex: "2 bazin super" ne doit pas matcher "bazin super fanger".
+        // En cas de chevauchement (le nom d'un produit est contenu dans celui d'un
+        // autre à la même position), on garde le nom le plus long.
+        List<ProductNameMatch> nameMatches = new java.util.ArrayList<>();
         for (ShopProduct product : products) {
-            if (
-                items.containsKey(product.getId()) ||
-                productIndex(normalized, product) < 0
-            ) {
+            if (items.containsKey(product.getId())) {
                 continue;
             }
+            String name = normalize(
+                product.getNormalizedName() == null
+                    ? product.getName()
+                    : product.getNormalizedName()
+            );
+            if (name.isBlank()) {
+                continue;
+            }
+            int start = wordBoundaryIndexOf(normalized, name);
+            if (start >= 0) {
+                nameMatches.add(
+                    new ProductNameMatch(product, start, start + name.length())
+                );
+            }
+        }
+        // Trie par longueur de nom décroissante pour privilégier les noms les plus longs.
+        nameMatches.sort((a, b) ->
+            Integer.compare(b.end() - b.start(), a.end() - a.start())
+        );
+        List<ProductNameMatch> accepted = new java.util.ArrayList<>();
+        for (ProductNameMatch candidate : nameMatches) {
+            boolean overlaps = accepted
+                .stream()
+                .anyMatch(
+                    a ->
+                        candidate.start() < a.end() &&
+                        a.start() < candidate.end()
+                );
+            if (!overlaps) {
+                accepted.add(candidate);
+            }
+        }
+        for (ProductNameMatch match : accepted) {
+            ShopProduct product = match.product();
             Long quantity = extractQuantity(normalized, product, null);
             if (quantity == null || quantity <= 0) {
                 missingQuantity.add(product.getName());
@@ -3841,6 +3909,36 @@ public class ShopWhatsAppService {
         return -1;
     }
 
+    /**
+     * Recherche {@code needle} dans {@code haystack} en exigeant des frontières de
+     * mots (les caractères adjacents ne doivent pas être alphanumériques).
+     * Retourne l'index de début, ou -1 si absent.
+     */
+    private int wordBoundaryIndexOf(String haystack, String needle) {
+        if (isBlank(haystack) || isBlank(needle)) {
+            return -1;
+        }
+        int from = 0;
+        while (from <= haystack.length() - needle.length()) {
+            int index = haystack.indexOf(needle, from);
+            if (index < 0) {
+                return -1;
+            }
+            boolean leftOk =
+                index == 0 ||
+                !Character.isLetterOrDigit(haystack.charAt(index - 1));
+            int after = index + needle.length();
+            boolean rightOk =
+                after >= haystack.length() ||
+                !Character.isLetterOrDigit(haystack.charAt(after));
+            if (leftOk && rightOk) {
+                return index;
+            }
+            from = index + 1;
+        }
+        return -1;
+    }
+
     private List<String> productTokens(ShopProduct product) {
         String name = normalize(
             product.getNormalizedName() == null
@@ -3911,6 +4009,8 @@ public class ShopWhatsAppService {
     ) {}
 
     private record PaymentInput(String customerQuery, Long amount) {}
+
+    private record ProductNameMatch(ShopProduct product, int start, int end) {}
 
     private record ProductMatch(
         ShopProduct product,

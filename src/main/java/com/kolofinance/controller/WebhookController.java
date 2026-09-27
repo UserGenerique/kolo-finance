@@ -8,6 +8,7 @@ import com.kolofinance.model.DraftExpense;
 import com.kolofinance.model.Expense;
 import com.kolofinance.model.Fund;
 import com.kolofinance.model.User;
+import com.kolofinance.model.WhatsAppChannel;
 import com.kolofinance.service.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +48,7 @@ public class WebhookController {
     private final ReportCommandService reportCommandService;
     private final ShopWhatsAppService shopWhatsAppService;
     private final PlatformWhatsAppAdminService platformWhatsAppAdminService;
+    private final WhatsAppChannelService whatsAppChannelService;
     private final ObjectMapper objectMapper;
 
     private static final Pattern RECEIPT_ID_PATTERN = Pattern.compile("#?(\\d+)");
@@ -143,7 +145,13 @@ public class WebhookController {
                 return ResponseEntity.ok("OK");
             }
 
-            processMessage(phoneNumber, text, message.getId());
+            Optional<WhatsAppChannel> channel = whatsAppChannelService.resolveGowa(
+                    payload.getDeviceId(), phoneNumber);
+            if (channel.isPresent()) {
+                processMessage(phoneNumber, text, message.getId(), channel.get());
+            } else {
+                processMessage(phoneNumber, text, message.getId());
+            }
         } catch (Exception e) {
             log.error("Erreur traitement webhook GOWA: {}", e.getMessage(), e);
         }
@@ -155,7 +163,12 @@ public class WebhookController {
      * Logique principale : identifier l'utilisateur, gérer brouillon ou nouvelle dépense.
      */
     private void processMessage(String phoneNumber, String text, String messageId) {
-        log.info("Message reçu de {}: '{}'", phoneNumber, text);
+        processMessage(phoneNumber, text, messageId, null);
+    }
+
+    private void processMessage(String phoneNumber, String text, String messageId, WhatsAppChannel channel) {
+        log.info("Message reçu de {}{}: '{}'", phoneNumber,
+                channel == null ? "" : " via canal " + channel.getId(), text);
         if (isDuplicateMessage(phoneNumber, text, messageId)) {
             log.info("Message WhatsApp dupliqué ignoré pour {}", phoneNumber);
             return;
@@ -179,6 +192,14 @@ public class WebhookController {
                     "Votre compte existe mais n'est actif dans aucune organisation. Contactez votre responsable.");
             return;
         }
+        if (channel != null && userService.findMembership(channel.getOrganization().getId(), user.getId())
+                .filter(membership -> Boolean.TRUE.equals(membership.getActive()))
+                .isEmpty()) {
+            log.warn("Utilisateur {} non membre du canal {}", user.getId(), channel.getId());
+            whatsAppService.sendError(phoneNumber,
+                    "Votre numéro n'est pas autorisé dans cette boutique.");
+            return;
+        }
         String textLower = text.trim().toLowerCase();
 
         // 2. Vérifier s'il y a un brouillon en attente
@@ -188,7 +209,8 @@ public class WebhookController {
         if (handlePendingReceiptCommand(user, textLower, false)) {
             return;
         }
-        if (shopWhatsAppService.handleMessage(user, text)) {
+        if (shopWhatsAppService.handleMessage(
+                user, text, channel != null ? channel.getOrganization().getId() : null)) {
             return;
         }
         // 4. Commandes d'aide et rapports à la demande
